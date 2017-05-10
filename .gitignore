@@ -1,3 +1,4 @@
-.DS_Store
+*.DS_Store
 writeup_template.md
 .ipynb_checkpoints
+tunings_imgs/
