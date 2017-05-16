@@ -3,18 +3,25 @@ import cv2
 
 
 class getLaneLine:
+    """
+    Class for Detecting Lane Lines, curvature and vehicle position
+    """
 
     def __init__(self):
 
-        # Create empty lists to receive left and right lane pixel indices
         self.left_lane_indices = []
         self.right_lane_indices = []
 
+        # polynomial coefficients for lane lines
         self.left_fit = []
         self.right_fit = []
 
 
-    def windowAverage(self, binary_warped, nwindows=9, margin=100, minpix=50):
+    def sliding_window_search(self, binary_warped, nwindows=9, margin=100, minpix=50):
+        """
+        Give a preprocessed image(binalize and perspective transform),
+        compute polynomial coefficients of lane lines
+        """
 
         # Identify the x and y positions of all nonzero pixels in the image
         nonzero = binary_warped.nonzero()
@@ -23,7 +30,6 @@ class getLaneLine:
 
         if len(self.left_fit) == 0 and len(self.right_fit) == 0:
 
-            # Assuming you have created a warped binary image called "binary_warped"
             # Take a histogram of the bottom half of the image
             histogram = np.sum(binary_warped[int(binary_warped.shape[0]/2):,:], axis=0)
 
@@ -35,7 +41,6 @@ class getLaneLine:
 
             # Set height of windows
             window_height = np.int(binary_warped.shape[0]/nwindows)
-
 
             # Current positions to be updated for each window
             leftx_current = leftx_base
@@ -85,17 +90,15 @@ class getLaneLine:
             self.left_fit = np.polyfit(lefty, leftx, 2)
             self.right_fit = np.polyfit(righty, rightx, 2)
 
+        # If we got lanelines in previous frame,
+        # search lanelines based on previous polynomial coefficients
         elif len(self.left_fit) > 0 and len(self.right_fit) > 0:
 
-            # Assume you now have a new warped binary image
-            # from the next frame of video (also called "binary_warped")
-            # It's now much easier to find line pixels!
+            self.left_lane_indices = ((nonzerox > (self.left_fit[0]*(nonzeroy**2) + self.left_fit[1]*nonzeroy + self.left_fit[2] - margin)) &
+                                (nonzerox < (self.left_fit[0]*(nonzeroy**2) + self.left_fit[1]*nonzeroy + self.left_fit[2] + margin)))
 
-            left_lane_indices = ((nonzerox > (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] - margin)) &
-                                (nonzerox < (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] + margin)))
-
-            right_lane_indices = ((nonzerox > (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + right_fit[2] - margin)) &
-                                (nonzerox < (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + right_fit[2] + margin)))
+            self.right_lane_indices = ((nonzerox > (self.right_fit[0]*(nonzeroy**2) + self.right_fit[1]*nonzeroy + self.right_fit[2] - margin)) &
+                                (nonzerox < (self.right_fit[0]*(nonzeroy**2) + self.right_fit[1]*nonzeroy + self.right_fit[2] + margin)))
 
             # Again, extract left and right line pixel positions
             leftx = nonzerox[self.left_lane_indices]
@@ -103,19 +106,16 @@ class getLaneLine:
             lefty = nonzeroy[self.left_lane_indices]
             righty = nonzeroy[self.right_lane_indices]
 
-            # Fit a second order polynomial to each
             self.left_fit = np.polyfit(lefty, leftx, 2)
             self.right_fit = np.polyfit(righty, rightx, 2)
 
-            # Generate x and y values for plotting
-            # ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0] )
-            # left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
-            # right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
-
 
     def get_plotted_lane_lines_binalized_image(self, binary_warped, margin=10):
+        """
+        Give a preprocessed image, return a plotted laneline image using left_fit and right_fit
+        """
 
-        # Create an output image to draw on and  visualize the result
+        # Create an output image to draw on and visualize the result
         output_image = np.zeros_like(binary_warped)
         output_image = np.dstack((output_image, output_image, output_image))
         window_image = output_image.copy()
@@ -125,10 +125,13 @@ class getLaneLine:
         nonzeroy = np.array(nonzero[0])
         nonzerox = np.array(nonzero[1])
 
+        # Plot the lane lines (left: red, right; blue)
         output_image[nonzeroy[self.left_lane_indices], nonzerox[self.left_lane_indices]] = [255, 0, 0]
         output_image[nonzeroy[self.right_lane_indices], nonzerox[self.right_lane_indices]] = [0, 0, 255]
 
+        # Ganerate some data to draw the lane
         ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0])
+
         left_fitx = self.left_fit[0]*ploty**2 + self.left_fit[1]*ploty + self.left_fit[2]
         right_fitx = self.right_fit[0]*ploty**2 + self.right_fit[1]*ploty + self.right_fit[2]
         # Generate a polygon to illustrate the search window area
@@ -142,18 +145,20 @@ class getLaneLine:
 
         left_line_window = np.array([np.flipud(np.transpose(np.vstack([left_fitx+margin, ploty])))])
         right_line_window = np.array([np.transpose(np.vstack([right_fitx-margin, ploty]))])
+
         driving_points = np.hstack((left_line_window, right_line_window))
 
         cv2.fillPoly(window_image, np.int_([driving_points]), (0,255, 0))
-        #cv2.fillPoly(window_image, np.int_([right_line_points]), (0,255, 0))
 
         return cv2.addWeighted(output_image, 1, window_image, 0.3, 0)
 
 
     def determine_curvature(self, binary_warped):
-        # Determine the curvature of the lane
+        """
+        Determine the curvature of the lane lines
+        """
 
-        # Generate some fake data to represent lane-line pixels
+        # Generate some data to represent lane-line height pixels
         ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0])
         y_eval = np.max(ploty)
 
@@ -168,7 +173,7 @@ class getLaneLine:
         left_fit_cr = np.polyfit(ploty*ym_per_pix, left_fitx*xm_per_pix, 2)
         right_fit_cr = np.polyfit(ploty*ym_per_pix, right_fitx*xm_per_pix, 2)
 
-        # Calculate the new radii of curvature
+        # Calculate the new radius of curvature
         left_curvature_radius = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
         right_curvature_radius = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
 
