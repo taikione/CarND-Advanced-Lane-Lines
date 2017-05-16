@@ -77,8 +77,8 @@ class getLaneLine:
 
             # Extract left and right line pixel positions
             leftx = nonzerox[self.left_lane_indices]
-            lefty = nonzeroy[self.left_lane_indices]
             rightx = nonzerox[self.right_lane_indices]
+            lefty = nonzeroy[self.left_lane_indices]
             righty = nonzeroy[self.right_lane_indices]
 
             # Fit a second order polynomial to each
@@ -99,8 +99,8 @@ class getLaneLine:
 
             # Again, extract left and right line pixel positions
             leftx = nonzerox[self.left_lane_indices]
-            lefty = nonzeroy[self.left_lane_indices]
             rightx = nonzerox[self.right_lane_indices]
+            lefty = nonzeroy[self.left_lane_indices]
             righty = nonzeroy[self.right_lane_indices]
 
             # Fit a second order polynomial to each
@@ -113,7 +113,7 @@ class getLaneLine:
             # right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
 
 
-    def get_plotted_lane_line_binalized_image(self, binary_warped, margin=10):
+    def get_plotted_lane_lines_binalized_image(self, binary_warped, margin=10):
 
         # Create an output image to draw on and  visualize the result
         output_image = np.zeros_like(binary_warped)
@@ -151,18 +151,40 @@ class getLaneLine:
 
 
     def determine_curvature(self, binary_warped):
+        # Determine the curvature of the lane
 
-        # Determine the curvature of the lane and vehicle position with respect to center.
+        # Generate some fake data to represent lane-line pixels
         ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0])
+        y_eval = np.max(ploty)
+
+        # Define conversions in x and y from pixels space to meters
+        ym_per_pix = 27.4/binary_warped.shape[0] # meters per pixel in y dimension, lane lines length / birds eye viewed image height
+        xm_per_pix = 3.7/580 # meters per pixel in x dimension, lane lines width / lane lines width of birds eye viewed image
+
+        # Fit new polynomials to x,y in world space
         left_fitx = self.left_fit[0]*ploty**2 + self.left_fit[1]*ploty + self.left_fit[2]
         right_fitx = self.right_fit[0]*ploty**2 + self.right_fit[1]*ploty + self.right_fit[2]
 
-        # Define y-value where we want radius of curvature
-        # I'll choose the maximum y-value, corresponding to the bottom of the image
-        y_eval = np.max(ploty)
-        left_curverad = ((1 + (2 * self.left_fit[0] * y_eval + self.left_fit[1])**2)**1.5) / np.absolute(2 * self.left_fit[0])
-        right_curverad = ((1 + (2 * self.right_fit[0] * y_eval + self.right_fit[1])**2)**1.5) / np.absolute(2 * self.right_fit[0])
+        left_fit_cr = np.polyfit(ploty*ym_per_pix, left_fitx*xm_per_pix, 2)
+        right_fit_cr = np.polyfit(ploty*ym_per_pix, right_fitx*xm_per_pix, 2)
 
-        return left_curverad, right_curverad
+        # Calculate the new radii of curvature
+        left_curvature_radius = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
+        right_curvature_radius = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
+
+        return left_curvature_radius, right_curvature_radius
 
 
+    def get_vehicle_position(self):
+        """
+        Compute vehicle position with respect to center.
+        if vehicle position value is negative, vehicle is right of center.
+        :return float
+        """
+
+        lane_lines_center = np.mean([self.left_fit[2], self.right_fit[2]])
+        vehicle_position_center = 640
+
+        xm_per_pix = 3.7/580
+
+        return (lane_lines_center - vehicle_position_center)*xm_per_pix
