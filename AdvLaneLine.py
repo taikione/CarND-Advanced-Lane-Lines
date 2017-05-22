@@ -187,7 +187,10 @@ class getLaneLine:
         :return float
         """
 
-        lane_lines_center = np.mean([self.left_fit[2], self.right_fit[2]])
+        left_x0 = self.left_fit[0]*720**2 + self.left_fit[1]*720 + self.left_fit[2]
+        right_x0 = self.right_fit[0]*720**2 + self.right_fit[1]*720 + self.right_fit[2]
+
+        lane_lines_center = np.mean([left_x0, right_x0])
         vehicle_position_center = 640
 
         xm_per_pix = 3.7/580
