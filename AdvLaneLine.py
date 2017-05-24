@@ -155,7 +155,7 @@ class getLaneLine:
 
     def determine_curvature(self, binary_warped):
         """
-        Determine the curvature of the lane lines
+        Determine the curvature of center of lane lines
         """
 
         # Generate some data to represent lane-line height pixels
@@ -167,17 +167,15 @@ class getLaneLine:
         xm_per_pix = 3.7/580 # meters per pixel in x dimension, lane lines width / lane lines width of birds eye viewed image
 
         # Fit new polynomials to x,y in world space
-        left_fitx = self.left_fit[0]*ploty**2 + self.left_fit[1]*ploty + self.left_fit[2]
-        right_fitx = self.right_fit[0]*ploty**2 + self.right_fit[1]*ploty + self.right_fit[2]
+        mean_fit = np.mean([self.left_fit, self.right_fit], axis=0)
+        left_and_right_fitx = mean_fit[0]*ploty**2 + mean_fit[1]*ploty + mean_fit[2]
 
-        left_fit_cr = np.polyfit(ploty*ym_per_pix, left_fitx*xm_per_pix, 2)
-        right_fit_cr = np.polyfit(ploty*ym_per_pix, right_fitx*xm_per_pix, 2)
+        left_and_right_fit_cr = np.polyfit(ploty*ym_per_pix, left_and_right_fitx*xm_per_pix, 2)
 
         # Calculate the new radius of curvature
-        left_curvature_radius = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
-        right_curvature_radius = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
+        center_curvature_radius = ((1 + (2*left_and_right_fit_cr[0]*y_eval*ym_per_pix + left_and_right_fit_cr[1])**2)**1.5) / np.absolute(2*left_and_right_fit_cr[0])
 
-        return left_curvature_radius, right_curvature_radius
+        return center_curvature_radius
 
 
     def get_vehicle_position(self):
@@ -187,7 +185,10 @@ class getLaneLine:
         :return float
         """
 
-        lane_lines_center = np.mean([self.left_fit[2], self.right_fit[2]])
+        left_x0 = self.left_fit[0]*720**2 + self.left_fit[1]*720 + self.left_fit[2]
+        right_x0 = self.right_fit[0]*720**2 + self.right_fit[1]*720 + self.right_fit[2]
+
+        lane_lines_center = np.mean([left_x0, right_x0])
         vehicle_position_center = 640
 
         xm_per_pix = 3.7/580
